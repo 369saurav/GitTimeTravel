@@ -1,90 +1,30 @@
-import { useState } from "react"
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
-type Branch = {
-  name: string
-  commit: {
-    sha: string
-  }
-}
+const useTimeTravel = () => {
+  const [data, setData] = useState(null);      // Stores commit history data
+  const [iserror, setError] = useState(null);      // Stores error if any
+  const [isloading, setLoading] = useState(true);  // Loading state
 
-type File = {
-  path: string
-  type: "file" | "dir"
-}
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get('/api/time-travel');
+        // Assuming response structure is:
+        // { data: [ { author, date, message, patch, ai_comment }, ...] }
+        setData(response.data.data);
+      } catch (err) {
+        setError(err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-// Mock API functions
-const mockFetchBranches = async (repoUrl: string): Promise<Branch[]> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  
-  // Mock data
-  return [
-    { name: "main", commit: { sha: "abc123" } },
-    { name: "develop", commit: { sha: "def456" } },
-    { name: "feature/new-ui", commit: { sha: "ghi789" } },
-  ]
-}
+    fetchData();
+  }, []); // runs once on mount
 
-const mockFetchFiles = async (repoUrl: string, branch: string): Promise<File[]> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  
-  // Mock data
-  return [
-    { path: "src/main.py", type: "file" },
-    { path: "src/utils.py", type: "file" },
-    { path: "tests", type: "dir" },
-    { path: "README.md", type: "file" },
-  ]
-}
+  return { data, iserror, isloading };
+};
 
-export const useGithub = () => {
-  const [repoUrl, setRepoUrl] = useState("")
-  const [branches, setBranches] = useState<Branch[]>([])
-  const [selectedBranch, setSelectedBranch] = useState<string>("")
-  const [files, setFiles] = useState<File[]>([])
-  const [selectedFile, setSelectedFile] = useState<string>("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchBranches = async (url: string) => {
-    try {
-      setLoading(true)
-      setError(null)
-      setRepoUrl(url)
-      const data = await mockFetchBranches(url)
-      setBranches(data)
-    } catch (err) {
-      setError("Failed to fetch branches")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchFiles = async (branch: string) => {
-    try {
-      setLoading(true)
-      setError(null)
-      setSelectedBranch(branch)
-      const data = await mockFetchFiles(repoUrl, branch)
-      setFiles(data)
-    } catch (err) {
-      setError("Failed to fetch files")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return {
-    repoUrl,
-    branches,
-    selectedBranch,
-    files,
-    selectedFile,
-    loading,
-    error,
-    fetchBranches,
-    fetchFiles,
-    setSelectedFile,
-  }
-} 
+export default useTimeTravel;
