@@ -64,13 +64,15 @@ def fetch_commit_history_with_diffs(file_url: str, token: str = None):
                 break
 
         history_entry = {
-            "commit_hash": sha,
+            # "commit_hash": sha,
             "author": commit_data.get("commit", {}).get("author", {}).get("name", "Unknown"),
             "date": commit_data.get("commit", {}).get("author", {}).get("date"),
             "message": commit_data.get("commit", {}).get("message", "").strip(),
-            "patch": file_diff  # This is a diff patch (or None if not present)
+            "patch": file_diff,  # This is a diff patch (or None if not present),
+            "ai_comment":"DUMMY COMMENT",
         }
         detailed_history.append(history_entry)
+        detailed_history.reverse()
 
     return detailed_history
 
