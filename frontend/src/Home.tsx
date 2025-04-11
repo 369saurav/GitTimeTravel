@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import TypingCodeEditor from "./typing-code-editor";
 
@@ -163,6 +163,11 @@ const Home = () => {
     root.classList.remove("light", "dark");
     root.classList.add(theme === "light" ? "dark" : "light");
   };
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.add("dark");
+  }, []);
 
   // Go back to home
   const handleBackClick = () => {
