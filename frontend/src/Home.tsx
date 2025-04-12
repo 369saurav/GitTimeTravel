@@ -67,8 +67,8 @@ const Home = () => {
         // Send URL and token in headers to your API
         const response = await axios.get('/api/time-travel', {
           headers: {
-            'X-Access-Token': accessToken,
-            'X-Github-Url': githubUrl
+            'Authorization': `Bearer ${accessToken}`,
+            'Github-Url': githubUrl
           }
         });
         
