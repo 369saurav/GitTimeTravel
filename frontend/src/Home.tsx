@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
-import axios from 'axios';
 
 interface CommitData {
   author: string;
@@ -15,14 +14,20 @@ interface CommitData {
 const Home = () => {
   const [githubUrl, setGithubUrl] = useState("");
   const [accessToken, setAccessToken] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [theme, setTheme] = useState<"vs-dark" | "light">("vs-dark");
   const [typingSpeed, setTypingSpeed] = useState<
     "zen" | "flow" | "blitz" | "quantum"
   >("flow");
-  const [commitData, setCommitData] = useState<CommitData[]>([]);
+  
+  // Get data and functions from the custom hook
+  const { 
+    data: commitData, 
+    iserror: hookError, 
+    isloading: loading, 
+    fetchCommitHistory 
+  } = useTimeTravel();
 
   // Extract relevant info from GitHub URL
   const parseGithubUrl = (url: string) => {
@@ -42,51 +47,13 @@ const Home = () => {
     }
   };
 
-  // Get data from the custom hook
-  const { data: hookData, iserror: hookError, isloading: hookLoading } = useTimeTravel();
-
   const handleTimeTravelClick = async () => {
     try {
-      if (!githubUrl.trim()) {
-        setError("Please enter a GitHub URL");
-        return;
-      }
-
-      if (!accessToken.trim()) {
-        setError("Please enter your GitHub access token");
-        return;
-      }
-
-      // Validate URL format
-      parseGithubUrl(githubUrl);
-      
-      setLoading(true);
       setError(null);
-
-      try {
-        // Send URL and token in headers to your API
-        const response = await axios.get('/api/time-travel', {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Github-Url': githubUrl
-          }
-        });
-        
-        if (response.data && response.data.data) {
-          setCommitData(response.data.data);
-          setShowCodeEditor(true);
-        } else {
-          throw new Error("Invalid response format from API");
-        }
-      } catch (err: any) {
-        console.error("API Error:", err);
-        setError(err.response?.data?.message || "Failed to fetch commit data");
-      } finally {
-        setLoading(false);
-      }
+      await fetchCommitHistory(githubUrl, accessToken);
+      setShowCodeEditor(true);
     } catch (err: any) {
       setError(err.message);
-      setLoading(false);
     }
   };
 
@@ -102,34 +69,17 @@ const Home = () => {
     root.classList.add("dark");
   }, []);
 
-  // Update from hook data when it's available
-  useEffect(() => {
-    if (showCodeEditor && hookData && hookData.length > 0) {
-      setCommitData(hookData);
-      setLoading(false);
-    }
-  }, [showCodeEditor, hookData]);
-
-  // Update loading state based on hook
-  useEffect(() => {
-    if (showCodeEditor) {
-      setLoading(hookLoading);
-    }
-  }, [showCodeEditor, hookLoading]);
-
   // Update error state based on hook
   useEffect(() => {
-    if (showCodeEditor && hookError) {
+    if (hookError) {
       setError(hookError.message);
-      setLoading(false);
     }
-  }, [showCodeEditor, hookError]);
+  }, [hookError]);
 
   // Go back to home
   const handleBackClick = () => {
     setShowCodeEditor(false);
     setGithubUrl("");
-    setCommitData([]);
     setError(null);
   };
 
@@ -305,101 +255,101 @@ const Home = () => {
               {/* Time Travel Button */}
               <div className="flex justify-center pt-2">
                 <button
-className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6 py-2"
-onClick={handleTimeTravelClick}
-disabled={loading || !githubUrl.trim() || !accessToken.trim()}
->
-{loading ? "Loading..." : "Time Travel"}
-</button>
-</div>
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6 py-2"
+                  onClick={handleTimeTravelClick}
+                  disabled={loading || !githubUrl.trim() || !accessToken.trim()}
+                >
+                  {loading ? "Loading..." : "Time Travel"}
+                </button>
+              </div>
 
-{/* Error Message */}
-{error && (
-<div className="text-destructive text-sm text-center">
-{error}
-</div>
-)}
-</div>
-</div>
-) : (
-<div className="w-full max-h-screen">
-<div className="max-w-6xl mx-auto">
-{/* Back button */}
-<div className="mb-4">
-<button
-onClick={handleBackClick}
-className="text-sm flex items-center gap-2 text-muted-foreground hover:text-foreground"
->
-<span>←</span> Back to search
-</button>
-</div>
+              {/* Error Message */}
+              {error && (
+                <div className="text-destructive text-sm text-center">
+                  {error}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="w-full max-h-screen">
+            <div className="max-w-6xl mx-auto">
+              {/* Back button */}
+              <div className="mb-4">
+                <button
+                  onClick={handleBackClick}
+                  className="text-sm flex items-center gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <span>←</span> Back to search
+                </button>
+              </div>
 
-{/* Loading indicator */}
-{loading && (
-<div className="text-center py-8">
-<div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-<p className="mt-2">Loading commit history...</p>
-</div>
-)}
+              {/* Loading indicator */}
+              {loading && (
+                <div className="text-center py-8">
+                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+                  <p className="mt-2">Loading commit history...</p>
+                </div>
+              )}
 
-{/* Error message */}
-{error && !loading && (
-<div className="text-destructive text-center py-8">
-<p>Error: {error}</p>
-</div>
-)}
+              {/* Error message */}
+              {error && !loading && (
+                <div className="text-destructive text-center py-8">
+                  <p>Error: {error}</p>
+                </div>
+              )}
 
-{/* Code editor with actual commit data */}
-{!loading && !error && commitData && commitData.length > 0 && (
-<>
-{/* Code editor title */}
-<div className="mb-4">
-  <h2 className="text-xl font-semibold">
-    Time Traveling through {githubUrl ? parseGithubUrl(githubUrl).path : "code"}
-  </h2>
-  <p className="text-sm text-muted-foreground flex items-center gap-2">
-    <span>Language: {getFileLanguage()}</span>
-    <span>•</span>
-    <span>Speed: {typingSpeed}</span>
-    <span>•</span>
-    <span>Commits: {commitData.length}</span>
-  </p>
-</div>
+              {/* Code editor with actual commit data */}
+              {!loading && !error && commitData && commitData.length > 0 && (
+                <>
+                  {/* Code editor title */}
+                  <div className="mb-4">
+                    <h2 className="text-xl font-semibold">
+                      Time Traveling through {githubUrl ? parseGithubUrl(githubUrl).path : "code"}
+                    </h2>
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <span>Language: {getFileLanguage()}</span>
+                      <span>•</span>
+                      <span>Speed: {typingSpeed}</span>
+                      <span>•</span>
+                      <span>Commits: {commitData.length}</span>
+                    </p>
+                  </div>
 
-{/* Monaco Code editor */}
-<div className="h-[calc(100vh-200px)]">
-  <TypingCodeEditor
-    commitData={commitData}
-    typingSpeed={
-      typingSpeed === "zen"
-        ? 100
-        : typingSpeed === "flow"
-        ? 300
-        : typingSpeed === "blitz"
-        ? 600
-        : 1000 // quantum
-    }
-    theme={theme}
-    language={getFileLanguage()}
-    githubUrl={githubUrl}
-    className="shadow-lg rounded-lg"
-  />
-</div>
-</>
-)}
+                  {/* Monaco Code editor */}
+                  <div className="h-[calc(100vh-200px)]">
+                    <TypingCodeEditor
+                      commitData={commitData}
+                      typingSpeed={
+                        typingSpeed === "zen"
+                          ? 100
+                          : typingSpeed === "flow"
+                          ? 300
+                          : typingSpeed === "blitz"
+                          ? 600
+                          : 1000 // quantum
+                      }
+                      theme={theme}
+                      language={getFileLanguage()}
+                      githubUrl={githubUrl}
+                      className="shadow-lg rounded-lg"
+                    />
+                  </div>
+                </>
+              )}
 
-{/* No data message */}
-{!loading && !error && (!commitData || commitData.length === 0) && (
-<div className="text-center py-8">
-<p>No commit data available. Try a different file.</p>
-</div>
-)}
-</div>
-</div>
-)}
-</div>
-</div>
-);
+              {/* No data message */}
+              {!loading && !error && (!commitData || commitData.length === 0) && (
+                <div className="text-center py-8">
+                  <p>No commit data available. Try a different file.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default Home;
