@@ -18,7 +18,8 @@ def get_all_data(
     """
     Get all data from git repository.
     """
+    url = "https://github.com/369saurav/PlayGM/blob/master/core/usecase/playgm_usecase.py"
     logger.info("Fetching all data from git repository")
-    commits = fetch_commit_history_with_diffs()
+    commits = fetch_commit_history_with_diffs(url)
    
     return {"data": commits}
