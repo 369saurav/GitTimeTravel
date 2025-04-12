@@ -18,7 +18,7 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"vs-dark" | "light">("vs-dark");
   const [typingSpeed, setTypingSpeed] = useState<
     "zen" | "flow" | "blitz" | "quantum"
   >("flow");
@@ -67,8 +67,8 @@ const Home = () => {
         // Send URL and token in headers to your API
         const response = await axios.get('/api/time-travel', {
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Github-Url': githubUrl
+            'X-Access-Token': accessToken,
+            'X-Github-Url': githubUrl
           }
         });
         
@@ -91,10 +91,10 @@ const Home = () => {
   };
 
   const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
+    setTheme(theme === "light" ? "vs-dark" : "light");
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
-    root.classList.add(theme === "light" ? "dark" : "light");
+    root.classList.add(theme === "light" ? "light" : "dark");
   };
 
   useEffect(() => {
@@ -131,6 +131,49 @@ const Home = () => {
     setGithubUrl("");
     setCommitData([]);
     setError(null);
+  };
+
+  // Determine file language from GitHub URL
+  const getFileLanguage = () => {
+    if (!githubUrl) return "javascript";
+    
+    try {
+      const { path } = parseGithubUrl(githubUrl);
+      const extension = path.split('.').pop()?.toLowerCase();
+      
+      const languageMap: { [key: string]: string } = {
+        'js': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'jsx': 'javascript',
+        'py': 'python',
+        'java': 'java',
+        'c': 'c',
+        'cpp': 'cpp',
+        'cs': 'csharp',
+        'go': 'go',
+        'rb': 'ruby',
+        'php': 'php',
+        'html': 'html',
+        'css': 'css',
+        'json': 'json',
+        'md': 'markdown',
+        'sql': 'sql',
+        'sh': 'shell',
+        'bash': 'shell',
+        'yml': 'yaml',
+        'yaml': 'yaml',
+        'xml': 'xml',
+        'dart': 'dart',
+        'swift': 'swift',
+        'kt': 'kotlin',
+        'rs': 'rust'
+      };
+      
+      return extension && languageMap[extension] ? languageMap[extension] : "plaintext";
+    } catch (error) {
+      return "plaintext";
+    }
   };
 
   return (
@@ -175,7 +218,7 @@ const Home = () => {
                   id="githubUrl"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   type="text"
-                  placeholder="https://github.com/vercel/next.js/blob/..."
+                  placeholder="https://github.com/369saurav/PlayGM/blob/master/core/usecase/playgm_usecase.py"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
                 />
@@ -262,99 +305,101 @@ const Home = () => {
               {/* Time Travel Button */}
               <div className="flex justify-center pt-2">
                 <button
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6 py-2"
-                  onClick={handleTimeTravelClick}
-                  disabled={loading || !githubUrl.trim() || !accessToken.trim()}
-                >
-                  {loading ? "Loading..." : "Time Travel"}
-                </button>
-              </div>
+className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6 py-2"
+onClick={handleTimeTravelClick}
+disabled={loading || !githubUrl.trim() || !accessToken.trim()}
+>
+{loading ? "Loading..." : "Time Travel"}
+</button>
+</div>
 
-              {/* Error Message */}
-              {error && (
-                <div className="text-destructive text-sm text-center">
-                  {error}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="w-full">
-            <div className="max-w-4xl mx-auto">
-              {/* Back button */}
-              <div className="mb-4">
-                <button
-                  onClick={handleBackClick}
-                  className="text-sm flex items-center gap-2 text-muted-foreground hover:text-foreground"
-                >
-                  <span>←</span> Back to search
-                </button>
-              </div>
+{/* Error Message */}
+{error && (
+<div className="text-destructive text-sm text-center">
+{error}
+</div>
+)}
+</div>
+</div>
+) : (
+<div className="w-full max-h-screen">
+<div className="max-w-6xl mx-auto">
+{/* Back button */}
+<div className="mb-4">
+<button
+onClick={handleBackClick}
+className="text-sm flex items-center gap-2 text-muted-foreground hover:text-foreground"
+>
+<span>←</span> Back to search
+</button>
+</div>
 
-              {/* Commit data info */}
-              <div className="text-xs text-gray-500 mb-2">
-                Commit data: {commitData?.length || 0} items
-              </div>
+{/* Loading indicator */}
+{loading && (
+<div className="text-center py-8">
+<div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+<p className="mt-2">Loading commit history...</p>
+</div>
+)}
 
-              {/* Loading indicator */}
-              {loading && (
-                <div className="text-center py-8">
-                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-                  <p className="mt-2">Loading commit history...</p>
-                </div>
-              )}
+{/* Error message */}
+{error && !loading && (
+<div className="text-destructive text-center py-8">
+<p>Error: {error}</p>
+</div>
+)}
 
-              {/* Error message */}
-              {error && !loading && (
-                <div className="text-destructive text-center py-8">
-                  <p>Error: {error}</p>
-                </div>
-              )}
+{/* Code editor with actual commit data */}
+{!loading && !error && commitData && commitData.length > 0 && (
+<>
+{/* Code editor title */}
+<div className="mb-4">
+  <h2 className="text-xl font-semibold">
+    Time Traveling through {githubUrl ? parseGithubUrl(githubUrl).path : "code"}
+  </h2>
+  <p className="text-sm text-muted-foreground flex items-center gap-2">
+    <span>Language: {getFileLanguage()}</span>
+    <span>•</span>
+    <span>Speed: {typingSpeed}</span>
+    <span>•</span>
+    <span>Commits: {commitData.length}</span>
+  </p>
+</div>
 
-              {/* Code editor with actual commit data */}
-              {!loading && !error && commitData && commitData.length > 0 && (
-                <>
-                  {/* Code editor title */}
-                  <div className="mb-4">
-                    <h2 className="text-xl font-semibold">
-                      Time Traveling through {githubUrl ? parseGithubUrl(githubUrl).path : "code"}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Watching how this file evolved over time
-                    </p>
-                  </div>
+{/* Monaco Code editor */}
+<div className="h-[calc(100vh-200px)]">
+  <TypingCodeEditor
+    commitData={commitData}
+    typingSpeed={
+      typingSpeed === "zen"
+        ? 100
+        : typingSpeed === "flow"
+        ? 300
+        : typingSpeed === "blitz"
+        ? 600
+        : 1000 // quantum
+    }
+    theme={theme}
+    language={getFileLanguage()}
+    githubUrl={githubUrl}
+    className="shadow-lg rounded-lg"
+  />
+</div>
+</>
+)}
 
-                  {/* Code editor */}
-                 
-                    <TypingCodeEditor
-                    commitData={commitData}
-                    typingSpeed={
-                      typingSpeed === "zen"
-                        ? 10
-                        : typingSpeed === "flow"
-                        ? 20
-                        : typingSpeed === "blitz"
-                        ? 40
-                        : 80 // quantum
-                    }
-                    monacoTheme={theme === "dark" ? "vs-dark" : "vs-light"}
-                    className="shadow-lg rounded-lg"
-                  />
-                </>
-              )}
-
-              {/* No data message */}
-              {!loading && !error && (!commitData || commitData.length === 0) && (
-                <div className="text-center py-8">
-                  <p>No commit data available. Try a different file.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+{/* No data message */}
+{!loading && !error && (!commitData || commitData.length === 0) && (
+<div className="text-center py-8">
+<p>No commit data available. Try a different file.</p>
+</div>
+)}
+</div>
+</div>
+)}
+</div>
+</div>
+);
 };
 
 export default Home;

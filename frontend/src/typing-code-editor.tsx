@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
+import * as monaco from "monaco-editor";
+import { useMonaco } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 
 // Interface for commit data from API
 interface CommitData {
@@ -28,8 +31,10 @@ interface TypingCodeEditorProps {
   codeChunks?: CodeChunk[]; // Original format (for backward compatibility)
   typingSpeed?: number; // Characters per second
   initialDelay?: number; // Delay before starting typing in ms
-  monacoTheme?: "vs-dark" | "vs-light";
+  language?: string; // Programming language for syntax highlighting
+  theme?: "vs-dark" | "light";
   className?: string;
+  githubUrl?: string; // GitHub URL to determine file extension
 }
 
 const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
@@ -37,17 +42,18 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
   codeChunks = [],
   typingSpeed = 20,
   initialDelay = 500,
-  monacoTheme = "vs-dark",
+  language = "javascript",
+  theme = "vs-dark",
   className = "",
+  githubUrl = "",
 }) => {
   // Using refs to track state without causing re-renders
   const processedRef = useRef<boolean>(false);
   const dataIdRef = useRef<string>("");
-  const codeLineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   
   // State variables
-  const [displayedCode, setDisplayedCode] = useState<string[]>([]);
-  const [displayedTypes, setDisplayedTypes] = useState<("add" | "remove" | "context")[]>([]);
+  const [currentText, setCurrentText] = useState<string>("");
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [currentChunkProgress, setCurrentChunkProgress] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
@@ -59,10 +65,70 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     comment: string;
     avatar?: string;
   } | null>(null);
-  const [commentCardPosition, setCommentCardPosition] = useState(0);
+  const [editorHeight, setEditorHeight] = useState("500px");
+  const [detectedLanguage, setDetectedLanguage] = useState(language);
+  
+  // Monaco instance
+  const monaco = useMonaco();
+
+  // Detect language from GitHub URL or file extension
+  useEffect(() => {
+    if (githubUrl) {
+      const extension = githubUrl.split('.').pop()?.toLowerCase();
+      
+      const languageMap: { [key: string]: string } = {
+        'js': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'jsx': 'javascript',
+        'py': 'python',
+        'java': 'java',
+        'c': 'c',
+        'cpp': 'cpp',
+        'cs': 'csharp',
+        'go': 'go',
+        'rb': 'ruby',
+        'php': 'php',
+        'html': 'html',
+        'css': 'css',
+        'json': 'json',
+        'md': 'markdown',
+        'sql': 'sql',
+        'sh': 'shell',
+        'bash': 'shell',
+        'yml': 'yaml',
+        'yaml': 'yaml',
+        'xml': 'xml',
+        'dart': 'dart',
+        'swift': 'swift',
+        'kt': 'kotlin',
+        'rs': 'rust'
+      };
+      
+      if (extension && languageMap[extension]) {
+        setDetectedLanguage(languageMap[extension]);
+      }
+    }
+  }, [githubUrl]);
 
   // Generate a unique ID for the current data to detect changes
   const currentDataId = JSON.stringify(commitData) + JSON.stringify(codeChunks);
+
+  // Handle editor mounting
+  const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
+    editorRef.current = editor;
+    
+    // Set up any editor configurations here
+    editor.updateOptions({
+      readOnly: true,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      lineNumbers: 'on',
+      renderLineHighlight: 'all',
+      fontSize: 14,
+      fontFamily: 'Consolas, "Courier New", monospace',
+    });
+  };
 
   // Function to parse patch data into individual code chunks with type
   const parsePatchToChunks = (patch: string, commit: CommitData): { line: string; type: "add" | "remove" | "context"; commit: CommitData }[] => {
@@ -123,8 +189,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     dataIdRef.current = currentDataId;
     
     // Reset state for new data
-    setDisplayedCode([]);
-    setDisplayedTypes([]);
+    setCurrentText("");
     setCurrentChunkIndex(0);
     setCurrentChunkProgress(0);
     setIsTyping(false);
@@ -142,7 +207,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
         if (patchChunks.length === 0) {
           // Add at least one chunk for empty patches so we see something
           chunks.push({
-            code: "// No code changes in this commit",
+            code: "# No code changes in this commit",
             type: "context",
             comment: commit.ai_comment !== "DUMMY COMMENT" ? commit.ai_comment : "",
             user: {
@@ -219,33 +284,33 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     let timer: NodeJS.Timeout;
     
     if (currentChunk.type === "remove") {
-      // For removed lines, start with the full code and backspace one character at a time
+      // For removed lines, visually we'll just add them with strikethrough styling
+      // Monaco doesn't support good animations for removing text
       if (currentChunkProgress === 0) {
-        const newDisplayedCode = [...displayedCode];
-        newDisplayedCode[currentChunkIndex] = currentChunk.code;
-        setDisplayedCode(newDisplayedCode);
+        setCurrentText(prev => {
+          // We'll add this line with a special marker or decoration
+          // For now, we just add the line normally but we could add Monaco decorations later
+          return prev + (prev ? "\n" : "") + currentChunk.code;
+        });
         
-        const newDisplayedTypes = [...displayedTypes];
-        newDisplayedTypes[currentChunkIndex] = "remove";
-        setDisplayedTypes(newDisplayedTypes);
+        // Apply decorations to show this as removed
+        if (editorRef.current && monaco) {
+          const lineNumber = currentText.split('\n').length;
+          const model = editorRef.current.getModel();
+          
+          if (model) {
+            // Here we could add decorations for strikethrough/red color
+            // This would require a more advanced implementation
+          }
+        }
         
-        timer = setTimeout(() => {
-          setCurrentChunkProgress(1);
-        }, typingInterval);
-      } else if (currentChunkProgress <= currentChunk.code.length) {
-        timer = setTimeout(() => {
-          const newDisplayedCode = [...displayedCode];
-          newDisplayedCode[currentChunkIndex] = currentChunk.code.substring(0, currentChunk.code.length - currentChunkProgress);
-          setDisplayedCode(newDisplayedCode);
-          setCurrentChunkProgress(prev => prev + 1);
-        }, typingInterval);
+        // Move to next character immediately since we added the whole line
+        setCurrentChunkProgress(currentChunk.code.length);
       } else {
-        // Move to the next chunk
+        // Move to the next chunk after a pause
         timer = setTimeout(() => {
           setCurrentChunkIndex(prev => prev + 1);
           setCurrentChunkProgress(0);
-          setDisplayedCode(prev => [...prev, ""]);
-          setDisplayedTypes(prev => [...prev, "add"]);
         }, 500); // Pause between chunks
       }
     } else {
@@ -255,14 +320,28 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
         timer = setTimeout(() => {
           setCurrentChunkProgress(prev => prev + 1);
           
-          const newDisplayedCode = [...displayedCode];
-          newDisplayedCode[currentChunkIndex] = currentChunk.code.substring(0, currentChunkProgress + 1);
-          setDisplayedCode(newDisplayedCode);
+          // Update the current text
+          setCurrentText(prev => {
+            // If this is the first character of a new line, add a newline first
+            if (currentChunkProgress === 0 && prev.length > 0) {
+              return prev + "\n" + currentChunk.code.substring(0, 1);
+            }
+            // Otherwise, add the next character
+            else if (currentChunkProgress === 0) {
+              return currentChunk.code.substring(0, 1);
+            }
+            // Already started this line, just add the next character
+            else {
+              const lines = prev.split('\n');
+              lines[lines.length - 1] = currentChunk.code.substring(0, currentChunkProgress + 1);
+              return lines.join('\n');
+            }
+          });
           
-          if (currentChunkProgress === 0) {
-            const newDisplayedTypes = [...displayedTypes];
-            newDisplayedTypes[currentChunkIndex] = currentChunk.type;
-            setDisplayedTypes(newDisplayedTypes);
+          // Scroll to the current position
+          if (editorRef.current) {
+            const lineCount = currentText.split('\n').length;
+            editorRef.current.revealLineInCenter(lineCount);
           }
         }, typingInterval);
       } else {
@@ -270,37 +349,12 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
         timer = setTimeout(() => {
           setCurrentChunkIndex(prev => prev + 1);
           setCurrentChunkProgress(0);
-          setDisplayedCode(prev => [...prev, ""]);
-          setDisplayedTypes(prev => [...prev, "add"]);
         }, 500); // Pause between chunks
       }
     }
     
     return () => clearTimeout(timer);
-  }, [isTyping, currentChunkIndex, currentChunkProgress, processedCodeChunks, displayedCode, displayedTypes, typingSpeed]);
-
-  // Update comment card position based on current line
-  useEffect(() => {
-    if (currentChunkIndex < codeLineRefs.current.length && codeLineRefs.current[currentChunkIndex]) {
-      const lineElement = codeLineRefs.current[currentChunkIndex];
-      if (lineElement) {
-        const rect = lineElement.getBoundingClientRect();
-        const editorContainer = lineElement.closest('.code-editor-container');
-        if (editorContainer) {
-          const containerRect = editorContainer.getBoundingClientRect();
-          setCommentCardPosition(rect.top - containerRect.top);
-        }
-      }
-    }
-  }, [currentChunkIndex, displayedCode]);
-  
-  // Update references array when displayed code changes
-  useEffect(() => {
-    codeLineRefs.current = codeLineRefs.current.slice(0, displayedCode.length);
-    while (codeLineRefs.current.length < displayedCode.length) {
-      codeLineRefs.current.push(null);
-    }
-  }, [displayedCode.length]);
+  }, [isTyping, currentChunkIndex, currentChunkProgress, processedCodeChunks, currentText, typingSpeed, monaco]);
 
   // Format date for display
   const formatDate = (dateString: string): string => {
@@ -310,26 +364,6 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     } catch (error) {
       return dateString;
     }
-  };
-
-  // Generate syntax highlighting classes (simplified version)
-  const syntaxHighlight = (code: string): React.ReactNode => {
-    // Simple regex for keywords, strings, and comments
-    const highlighted = code
-      .replace(
-        /(const|let|var|function|return|if|else|for|while|import|export|from|class|interface|type|extends|implements)/g,
-        '<span class="text-purple-400">$1</span>'
-      )
-      .replace(
-        /(".*?"|'.*?'|`.*?`)/g,
-        '<span class="text-green-400">$1</span>'
-      )
-      .replace(
-        /(\/\/.*)/g,
-        '<span class="text-gray-400">$1</span>'
-      );
-      
-    return <div dangerouslySetInnerHTML={{ __html: highlighted }} />;
   };
 
   const getInitials = (name: string) => {
@@ -343,7 +377,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
   if (processedCodeChunks.length === 0) {
     return (
       <div className={`rounded-md overflow-hidden ${className}`}>
-        <div className={`p-4 ${monacoTheme === 'vs-dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
+        <div className={`p-4 ${theme === 'vs-dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
           <div className="text-center p-4">No code changes to display</div>
         </div>
       </div>
@@ -353,50 +387,26 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
   return (
     <div className="flex flex-col md:flex-row gap-4">
       {/* Code Editor */}
-      <div 
-        className={`rounded-md overflow-hidden flex-grow ${className}`}
-        style={{ fontFamily: 'Consolas, "Courier New", monospace' }}
-      >
-        <div className={`p-4 code-editor-container ${monacoTheme === 'vs-dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
-          {/* Monaco-like editor header */}
-          <div className="flex items-center justify-between mb-2 border-b border-gray-700 pb-2">
-            <div className="text-sm font-medium">Generated Code</div>
-            <div className="flex space-x-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            </div>
-          </div>
+      <div className={`rounded-md overflow-hidden flex-grow ${className}`}>
+        <div className={`code-editor-container ${theme === 'vs-dark' ? 'bg-gray-900' : 'bg-gray-100'}`}>
+          {/* Monaco Editor */}
+          <Editor
+            height={editorHeight}
+            theme={theme}
+            language={detectedLanguage}
+            value={currentText}
+            onMount={handleEditorDidMount}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              wordWrap: 'on'
+            }}
+          />
           
-          {/* Code area */}
-          <div className="relative">
-            {displayedCode.length === 0 && isTyping ? (
-              <div className="p-4 text-center text-gray-400">
-                <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-                <p className="mt-2">Preparing code...</p>
-              </div>
-            ) : (
-              <pre className="text-sm p-2 overflow-x-auto">
-                {displayedCode.map((chunk, index) => (
-                  <div 
-                    key={index} 
-                    className="flex mb-2"
-                    ref={el => codeLineRefs.current[index] = el}
-                  >
-                    <span className="inline-block w-8 text-gray-500 select-none text-right mr-4">
-                      {index + 1}
-                    </span>
-                    <div className={`flex-1 ${displayedTypes[index] === "remove" ? "bg-red-900/30 line-through" : displayedTypes[index] === "add" ? "bg-green-900/20" : ""}`}>
-                      {syntaxHighlight(chunk)}
-                    </div>
-                    {index === currentChunkIndex && isTyping && (
-                      <span className="animate-pulse">|</span>
-                    )}
-                  </div>
-                ))}
-              </pre>
-            )}
-          </div>
+          {/* Typing cursor overlay - this would require more advanced DOM manipulation */}
+          {/* For now we'll rely on Monaco's cursor, but a custom cursor could be added */}
         </div>
       </div>
       
@@ -404,7 +414,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
       {isTyping && activeCommit && (
         <div className="w-80 md:w-96 flex-shrink-0">
           <div 
-            className={`p-4 rounded-md shadow-md ${monacoTheme === 'vs-dark' ? 'bg-gray-800' : 'bg-white'}`}
+            className={`p-4 rounded-md shadow-md ${theme === 'vs-dark' ? 'bg-gray-800' : 'bg-white'}`}
             style={{ 
               position: 'sticky',
               top: '20px',
@@ -432,7 +442,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
                 </div>
                 
                 {activeCommit.comment && (
-                  <div className="bg-gray-700/30 rounded p-2 text-sm text-gray-300">
+                  <div className={`${theme === 'vs-dark' ? 'bg-gray-700/30 text-gray-300' : 'bg-gray-100 text-gray-700'} rounded p-2 text-sm`}>
                     {activeCommit.comment}
                   </div>
                 )}
