@@ -2,14 +2,21 @@ import React, { useState, useEffect, useRef } from "react";
 import * as monaco from "monaco-editor";
 import { useMonaco } from "@monaco-editor/react";
 import Editor from "@monaco-editor/react";
+import { Volume2, VolumeX } from "lucide-react";
 
 // Interface for commit data from API
+interface CommitChange {
+  type: "add" | "remove" | "context";
+  line: number;
+  content: string;
+}
+
 interface CommitData {
   author: string;
   date: string;
   message: string;
-  patch: string;
   ai_comment: string;
+  changes: CommitChange[];
 }
 
 // Define the interface for the code chunk with comment
@@ -23,6 +30,7 @@ interface CodeChunk {
   };
   date?: string;
   commitMessage?: string;
+  line?: number; // Line number in the file
 }
 
 // Props interface for the TypingCodeEditor component
@@ -35,6 +43,7 @@ interface TypingCodeEditorProps {
   theme?: "vs-dark" | "light";
   className?: string;
   githubUrl?: string; // GitHub URL to determine file extension
+  soundEnabled?: boolean; // Whether sounds are initially enabled
 }
 
 const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
@@ -46,18 +55,34 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
   theme = "vs-dark",
   className = "",
   githubUrl = "",
+  soundEnabled = true,
 }) => {
   // Using refs to track state without causing re-renders
   const processedRef = useRef<boolean>(false);
   const dataIdRef = useRef<string>("");
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   
+  // Sound effect refs
+  const typingSoundRef = useRef<HTMLAudioElement | null>(null);
+  const deleteSoundRef = useRef<HTMLAudioElement | null>(null);
+  const returnSoundRef = useRef<HTMLAudioElement | null>(null);
+  
   // State variables
-  const [currentText, setCurrentText] = useState<string>("");
-  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
-  const [currentChunkProgress, setCurrentChunkProgress] = useState(0);
+  const [fileLines, setFileLines] = useState<string[]>([]);
+  const [currentCommitIndex, setCurrentCommitIndex] = useState(0);
+  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
+  const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
-  const [processedCodeChunks, setProcessedCodeChunks] = useState<CodeChunk[]>([]);
+  const [processedCommits, setProcessedCommits] = useState<{
+    changes: CodeChunk[], 
+    metadata: {
+      author: string;
+      date: string;
+      message: string;
+      comment: string;
+      avatar?: string;
+    }
+  }[]>([]);
   const [activeCommit, setActiveCommit] = useState<{
     author: string;
     date: string;
@@ -67,9 +92,60 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
   } | null>(null);
   const [editorHeight, setEditorHeight] = useState("500px");
   const [detectedLanguage, setDetectedLanguage] = useState(language);
+  const [soundOn, setSoundOn] = useState(soundEnabled);
+  const [volume, setVolume] = useState(0.3); // Default volume level
   
   // Monaco instance
   const monaco = useMonaco();
+
+  // Initialize sound effects
+  useEffect(() => {
+    // Create audio elements
+    typingSoundRef.current = new Audio("/sounds/keypress.mp3");
+    deleteSoundRef.current = new Audio("/sounds/delete.mp3");
+    returnSoundRef.current = new Audio("/sounds/return.mp3");
+    
+    // Set volumes
+    if (typingSoundRef.current) typingSoundRef.current.volume = volume;
+    if (deleteSoundRef.current) deleteSoundRef.current.volume = volume;
+    if (returnSoundRef.current) returnSoundRef.current.volume = volume;
+    
+    return () => {
+      // Clean up
+      typingSoundRef.current = null;
+      deleteSoundRef.current = null;
+      returnSoundRef.current = null;
+    };
+  }, []);
+
+  // Update volume when changed
+  useEffect(() => {
+    if (typingSoundRef.current) typingSoundRef.current.volume = volume;
+    if (deleteSoundRef.current) deleteSoundRef.current.volume = volume;
+    if (returnSoundRef.current) returnSoundRef.current.volume = volume;
+  }, [volume]);
+
+  // Play sound function
+  const playSound = (type: 'type' | 'delete' | 'return') => {
+    if (!soundOn) return;
+    
+    try {
+      if (type === 'type' && typingSoundRef.current) {
+        // Clone the audio element to allow rapid succession of sounds
+        const sound = typingSoundRef.current.cloneNode(true) as HTMLAudioElement;
+        sound.volume = volume;
+        sound.play().catch(e => console.log("Error playing sound:", e));
+      } else if (type === 'delete' && deleteSoundRef.current) {
+        const sound = deleteSoundRef.current.cloneNode(true) as HTMLAudioElement;
+        sound.volume = volume;
+        sound.play().catch(e => console.log("Error playing sound:", e));
+      } else if (type === 'return' && returnSoundRef.current) {
+        returnSoundRef.current.play().catch(e => console.log("Error playing sound:", e));
+      }
+    } catch (error) {
+      console.error("Failed to play sound effect:", error);
+    }
+  };
 
   // Detect language from GitHub URL or file extension
   useEffect(() => {
@@ -130,55 +206,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     });
   };
 
-  // Function to parse patch data into individual code chunks with type
-  const parsePatchToChunks = (patch: string, commit: CommitData): { line: string; type: "add" | "remove" | "context"; commit: CommitData }[] => {
-    const chunks: { line: string; type: "add" | "remove" | "context"; commit: CommitData }[] = [];
-    
-    // If patch is undefined or null, return empty array
-    if (!patch) {
-      return chunks;
-    }
-    
-    try {
-      // Split the patch by lines
-      const patchLines = patch.split('\n');
-      
-      patchLines.forEach((line) => {
-        // Skip patch headers (lines starting with @@)
-        if (line.startsWith('@@')) return;
-        
-        // Process added lines (starting with +)
-        if (line.startsWith('+')) {
-          // Skip the first + character
-          const codeLine = line.substring(1);
-          // Don't include the diff header line (+++), but include empty lines
-          if (!line.startsWith('+++')) {
-            chunks.push({ line: codeLine, type: "add", commit });
-          }
-        } 
-        // Process removed lines (starting with -)
-        else if (line.startsWith('-')) {
-          // Skip the first - character
-          const codeLine = line.substring(1);
-          // Don't include the diff header line (---), but include empty lines
-          if (!line.startsWith('---')) {
-            chunks.push({ line: codeLine, type: "remove", commit });
-          }
-        }
-        // Context lines (no prefix)
-        else if (!line.startsWith('diff') && !line.startsWith('index') && !line.startsWith('---') && !line.startsWith('+++')) {
-          chunks.push({ line, type: "context", commit });
-        }
-      });
-      
-      return chunks;
-    } catch (error) {
-      console.error("Error parsing patch:", error);
-      return [];
-    }
-  };
-
-  // Process commit data into code chunks format - only when data changes
+  // Process commit data into organized changes - only when data changes
   useEffect(() => {
     // Skip if data hasn't changed
     if (dataIdRef.current === currentDataId) {
@@ -189,70 +217,75 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     dataIdRef.current = currentDataId;
     
     // Reset state for new data
-    setCurrentText("");
-    setCurrentChunkIndex(0);
-    setCurrentChunkProgress(0);
+    setFileLines([]);
+    setCurrentCommitIndex(0);
+    setCurrentChangeIndex(0);
+    setCurrentCharIndex(0);
     setIsTyping(false);
     setActiveCommit(null);
     processedRef.current = false;
     
     if (commitData && commitData.length > 0) {
-      // Transform API data into code chunks
-      const chunks: CodeChunk[] = [];
-      
-      commitData.forEach((commit) => {
-        // Process patch data
-        const patchChunks = parsePatchToChunks(commit.patch, commit);
+      // Transform API data into processed commits
+      const processedData = commitData.map(commit => {
+        const commitChanges: CodeChunk[] = commit.changes?.map(change => ({
+          code: change.content,
+          type: change.type,
+          line: change.line
+        })) || [{
+          code: "# No code changes in this commit",
+          type: "context",
+          line: 1
+        }];
         
-        if (patchChunks.length === 0) {
-          // Add at least one chunk for empty patches so we see something
-          chunks.push({
-            code: "# No code changes in this commit",
-            type: "context",
-            comment: commit.ai_comment !== "DUMMY COMMENT" ? commit.ai_comment : "",
-            user: {
-              name: commit.author,
-              avatar: "https://api.dicebear.com/6.x/avataaars/svg?seed=" + commit.author.replace(/\s+/g, ''),
-            },
+        return {
+          changes: commitChanges,
+          metadata: {
+            author: commit.author,
             date: commit.date,
-            commitMessage: commit.message
-          });
-        } else {
-          patchChunks.forEach(chunk => {
-            chunks.push({
-              code: chunk.line,
-              type: chunk.type,
-              comment: chunk.commit.ai_comment !== "DUMMY COMMENT" ? chunk.commit.ai_comment : "",
-              user: {
-                name: chunk.commit.author,
-                avatar: "https://api.dicebear.com/6.x/avataaars/svg?seed=" + chunk.commit.author.replace(/\s+/g, ''),
-              },
-              date: chunk.commit.date,
-              commitMessage: chunk.commit.message
-            });
-          });
-        }
+            message: commit.message,
+            comment: commit.ai_comment !== "DUMMY COMMENT" ? commit.ai_comment : "",
+            avatar: `https://api.dicebear.com/6.x/avataaars/svg?seed=${commit.author.replace(/\s+/g, '')}`
+          }
+        };
       });
       
-      setProcessedCodeChunks(chunks);
+      setProcessedCommits(processedData);
     } else if (codeChunks && codeChunks.length > 0) {
-      // Use provided code chunks if no commit data
-      setProcessedCodeChunks(codeChunks.map(chunk => ({
-        ...chunk,
-        type: chunk.type || "add" // Default to "add" for backward compatibility
-      })));
+      // Legacy support for code chunks format
+      // Group code chunks into "commits" for compatibility
+      const processedData = [{
+        changes: codeChunks.map(chunk => ({
+          ...chunk,
+          type: chunk.type || "add" // Default to "add" for backward compatibility
+        })),
+        metadata: {
+          author: codeChunks[0].user?.name || "Unknown",
+          date: codeChunks[0].date || new Date().toISOString(),
+          message: codeChunks[0].commitMessage || "Code changes",
+          comment: codeChunks[0].comment || "",
+          avatar: codeChunks[0].user?.avatar
+        }
+      }];
+      
+      setProcessedCommits(processedData);
     }
   }, [commitData, codeChunks, currentDataId]);
 
   // Initialize typing animation - only once per data set
   useEffect(() => {
-    if (!processedCodeChunks.length || processedRef.current) return;
+    if (!processedCommits.length || processedRef.current) return;
     
     // Mark as processed to prevent multiple initializations
     processedRef.current = true;
     
     const startTyping = () => {
       setIsTyping(true);
+      
+      // Set the first commit's metadata as active
+      if (processedCommits.length > 0) {
+        setActiveCommit(processedCommits[0].metadata);
+      }
     };
 
     // Start with initial delay
@@ -261,100 +294,135 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     return () => {
       clearTimeout(initialTimer);
     };
-  }, [processedCodeChunks, initialDelay]);
+  }, [processedCommits, initialDelay]);
+
+  // Apply a single character of the current change
+  const applyNextCharacter = () => {
+    if (currentCommitIndex >= processedCommits.length) return;
+    
+    const currentCommit = processedCommits[currentCommitIndex];
+    const changes = currentCommit.changes;
+    
+    if (currentChangeIndex >= changes.length) {
+      // Move to the next commit
+      const nextCommitIndex = currentCommitIndex + 1;
+      if (nextCommitIndex < processedCommits.length) {
+        setCurrentCommitIndex(nextCommitIndex);
+        setCurrentChangeIndex(0);
+        setCurrentCharIndex(0);
+        setActiveCommit(processedCommits[nextCommitIndex].metadata);
+      }
+      return;
+    }
+    
+    const currentChange = changes[currentChangeIndex];
+    
+    if (currentChange.type === "add") {
+      if (currentCharIndex === 0) {
+        // First character of a new line being added
+        const newLines = [...fileLines];
+        const lineIndex = currentChange.line ? currentChange.line - 1 : newLines.length;
+        
+        // Insert an empty string at the line position
+        newLines.splice(lineIndex, 0, "");
+        setFileLines(newLines);
+        
+        // Play return sound for a new line
+        playSound('return');
+      }
+      
+      if (currentCharIndex < currentChange.code.length) {
+        // Add the next character to the line
+        setFileLines(prevLines => {
+          const newLines = [...prevLines];
+          const lineIndex = currentChange.line ? currentChange.line - 1 : 0;
+          newLines[lineIndex] = currentChange.code.substring(0, currentCharIndex + 1);
+          return newLines;
+        });
+        
+        // Play typing sound
+        playSound('type');
+        
+        setCurrentCharIndex(currentCharIndex + 1);
+      } else {
+        // Done with this change, move to the next one
+        setCurrentChangeIndex(currentChangeIndex + 1);
+        setCurrentCharIndex(0);
+      }
+    } else if (currentChange.type === "remove") {
+      if (currentCharIndex === 0) {
+        // Start removing characters from end to beginning
+        setCurrentCharIndex(currentChange.code.length);
+      } else if (currentCharIndex > 0) {
+        // Remove one character at a time
+        setFileLines(prevLines => {
+          const newLines = [...prevLines];
+          const lineIndex = currentChange.line ? currentChange.line - 1 : 0;
+          
+          if (lineIndex < newLines.length) {
+            newLines[lineIndex] = currentChange.code.substring(0, currentCharIndex - 1);
+            
+            // If we've removed all characters, remove the line
+            if (currentCharIndex === 1) {
+              newLines.splice(lineIndex, 1);
+            }
+          }
+          
+          return newLines;
+        });
+        
+        // Play delete sound
+        playSound('delete');
+        
+        setCurrentCharIndex(currentCharIndex - 1);
+      }
+      
+      // If we're done removing (reached the beginning)
+      if (currentCharIndex === 1) {
+        setCurrentChangeIndex(currentChangeIndex + 1);
+        setCurrentCharIndex(0);
+      }
+    } else {
+      // Context line (just keep it as is)
+      if (currentCharIndex === 0) {
+        setFileLines(prevLines => {
+          const newLines = [...prevLines];
+          const lineIndex = currentChange.line ? currentChange.line - 1 : newLines.length;
+          
+          // Add the context line if it doesn't already exist
+          if (lineIndex >= newLines.length) {
+            newLines.push(currentChange.code);
+          } else {
+            newLines[lineIndex] = currentChange.code;
+          }
+          
+          return newLines;
+        });
+        
+        // Move to the next change
+        setCurrentChangeIndex(currentChangeIndex + 1);
+      }
+    }
+    
+    // Scroll to the current position
+    if (editorRef.current) {
+      const currentLine = currentChange.line || fileLines.length;
+      editorRef.current.revealLineInCenter(currentLine);
+    }
+  };
 
   // Handle the typing animation
   useEffect(() => {
-    if (!isTyping || currentChunkIndex >= processedCodeChunks.length) return;
-
-    const currentChunk = processedCodeChunks[currentChunkIndex];
+    if (!isTyping || currentCommitIndex >= processedCommits.length) return;
+    
     const typingInterval = 1000 / typingSpeed;
     
-    // Update active commit info
-    if (currentChunk.user && currentChunk.commitMessage) {
-      setActiveCommit({
-        author: currentChunk.user.name || "Unknown",
-        date: currentChunk.date || new Date().toISOString(),
-        message: currentChunk.commitMessage,
-        comment: currentChunk.comment || "",
-        avatar: currentChunk.user.avatar
-      });
-    }
-    
-    let timer: NodeJS.Timeout;
-    
-    if (currentChunk.type === "remove") {
-      // For removed lines, visually we'll just add them with strikethrough styling
-      // Monaco doesn't support good animations for removing text
-      if (currentChunkProgress === 0) {
-        setCurrentText(prev => {
-          // We'll add this line with a special marker or decoration
-          // For now, we just add the line normally but we could add Monaco decorations later
-          return prev + (prev ? "\n" : "") + currentChunk.code;
-        });
-        
-        // Apply decorations to show this as removed
-        if (editorRef.current && monaco) {
-          const lineNumber = currentText.split('\n').length;
-          const model = editorRef.current.getModel();
-          
-          if (model) {
-            // Here we could add decorations for strikethrough/red color
-            // This would require a more advanced implementation
-          }
-        }
-        
-        // Move to next character immediately since we added the whole line
-        setCurrentChunkProgress(currentChunk.code.length);
-      } else {
-        // Move to the next chunk after a pause
-        timer = setTimeout(() => {
-          setCurrentChunkIndex(prev => prev + 1);
-          setCurrentChunkProgress(0);
-        }, 500); // Pause between chunks
-      }
-    } else {
-      // For added or context lines, type one character at a time
-      if (currentChunkProgress < currentChunk.code.length) {
-        // Still typing the current chunk
-        timer = setTimeout(() => {
-          setCurrentChunkProgress(prev => prev + 1);
-          
-          // Update the current text
-          setCurrentText(prev => {
-            // If this is the first character of a new line, add a newline first
-            if (currentChunkProgress === 0 && prev.length > 0) {
-              return prev + "\n" + currentChunk.code.substring(0, 1);
-            }
-            // Otherwise, add the next character
-            else if (currentChunkProgress === 0) {
-              return currentChunk.code.substring(0, 1);
-            }
-            // Already started this line, just add the next character
-            else {
-              const lines = prev.split('\n');
-              lines[lines.length - 1] = currentChunk.code.substring(0, currentChunkProgress + 1);
-              return lines.join('\n');
-            }
-          });
-          
-          // Scroll to the current position
-          if (editorRef.current) {
-            const lineCount = currentText.split('\n').length;
-            editorRef.current.revealLineInCenter(lineCount);
-          }
-        }, typingInterval);
-      } else {
-        // Move to the next chunk
-        timer = setTimeout(() => {
-          setCurrentChunkIndex(prev => prev + 1);
-          setCurrentChunkProgress(0);
-        }, 500); // Pause between chunks
-      }
-    }
+    const timer = setTimeout(() => {
+      applyNextCharacter();
+    }, typingInterval);
     
     return () => clearTimeout(timer);
-  }, [isTyping, currentChunkIndex, currentChunkProgress, processedCodeChunks, currentText, typingSpeed, monaco]);
+  }, [isTyping, currentCommitIndex, currentChangeIndex, currentCharIndex, processedCommits, fileLines, typingSpeed]);
 
   // Format date for display
   const formatDate = (dateString: string): string => {
@@ -374,7 +442,15 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
       .toUpperCase();
   };
 
-  if (processedCodeChunks.length === 0) {
+  const toggleSound = () => {
+    setSoundOn(!soundOn);
+  };
+
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setVolume(parseFloat(e.target.value));
+  };
+
+  if (processedCommits.length === 0) {
     return (
       <div className={`rounded-md overflow-hidden ${className}`}>
         <div className={`p-4 ${theme === 'vs-dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-black'}`}>
@@ -386,6 +462,28 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
 
   return (
     <div className="flex flex-col md:flex-row gap-4">
+      {/* Sound controls */}
+      <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
+        <button 
+          onClick={toggleSound}
+          className={`p-2 rounded-full ${theme === 'vs-dark' ? 'bg-gray-800 text-gray-200' : 'bg-gray-200 text-gray-800'}`}
+        >
+          {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+        </button>
+        
+        {soundOn && (
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={handleVolumeChange}
+            className="w-20"
+          />
+        )}
+      </div>
+      
       {/* Code Editor */}
       <div className={`rounded-md overflow-hidden flex-grow ${className}`}>
         <div className={`code-editor-container ${theme === 'vs-dark' ? 'bg-gray-900' : 'bg-gray-100'}`}>
@@ -394,7 +492,7 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
             height={editorHeight}
             theme={theme}
             language={detectedLanguage}
-            value={currentText}
+            value={fileLines.join('\n')}
             onMount={handleEditorDidMount}
             options={{
               readOnly: true,
@@ -404,9 +502,6 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
               wordWrap: 'on'
             }}
           />
-          
-          {/* Typing cursor overlay - this would require more advanced DOM manipulation */}
-          {/* For now we'll rely on Monaco's cursor, but a custom cursor could be added */}
         </div>
       </div>
       
@@ -446,11 +541,20 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
                     {activeCommit.comment}
                   </div>
                 )}
+
+                <div className="mt-3 text-xs text-gray-400">
+                  Commit {currentCommitIndex + 1} of {processedCommits.length}
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
+      
+      {/* Audio elements for sound effects (preload) */}
+      <audio src="/sounds/keypress.mp3" preload="auto" style={{ display: 'none' }} />
+      <audio src="/sounds/delete.mp3" preload="auto" style={{ display: 'none' }} />
+      <audio src="/sounds/return.mp3" preload="auto" style={{ display: 'none' }} />
     </div>
   );
 };

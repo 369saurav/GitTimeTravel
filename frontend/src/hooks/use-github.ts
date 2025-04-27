@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import axios from 'axios';
 
+interface CommitChange {
+  type: "add" | "remove" | "context";
+  line: number;
+  content: string;
+}
+
 interface CommitData {
   author: string;
   date: string;
   message: string;
-  patch: string;
   ai_comment: string;
+  changes: CommitChange[];
 }
 
 interface GitHubInfo {

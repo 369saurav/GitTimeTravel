@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Volume2, VolumeX } from "lucide-react";
 import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
+
+interface CommitChange {
+  type: "add" | "remove" | "context";
+  line: number;
+  content: string;
+}
 
 interface CommitData {
   author: string;
   date: string;
   message: string;
-  patch: string;
   ai_comment: string;
+  changes: CommitChange[];
 }
 
 const Home = () => {
@@ -17,6 +23,7 @@ const Home = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [theme, setTheme] = useState<"vs-dark" | "light">("vs-dark");
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [typingSpeed, setTypingSpeed] = useState<
     "zen" | "flow" | "blitz" | "quantum"
   >("flow");
@@ -62,6 +69,10 @@ const Home = () => {
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme === "light" ? "light" : "dark");
+  };
+
+  const toggleSound = () => {
+    setSoundEnabled(prev => !prev);
   };
 
   useEffect(() => {
@@ -252,6 +263,36 @@ const Home = () => {
                 </p>
               </div>
 
+              {/* Sound Toggle */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Sound Effects</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleSound}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      soundEnabled
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                    }`}
+                  >
+                    {soundEnabled ? (
+                      <>
+                        <Volume2 size={16} /> Enabled
+                      </>
+                    ) : (
+                      <>
+                        <VolumeX size={16} /> Disabled
+                      </>
+                    )}
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    {soundEnabled
+                      ? "Typing sounds enabled for a more immersive experience"
+                      : "Typing sounds disabled"}
+                  </span>
+                </div>
+              </div>
+
               {/* Time Travel Button */}
               <div className="flex justify-center pt-2">
                 <button
@@ -313,6 +354,8 @@ const Home = () => {
                       <span>Speed: {typingSpeed}</span>
                       <span>•</span>
                       <span>Commits: {commitData.length}</span>
+                      <span>•</span>
+                      <span>Sound: {soundEnabled ? "On" : "Off"}</span>
                     </p>
                   </div>
 
@@ -322,17 +365,18 @@ const Home = () => {
                       commitData={commitData}
                       typingSpeed={
                         typingSpeed === "zen"
-                          ? 100
+                          ? 10
                           : typingSpeed === "flow"
-                          ? 300
+                          ? 20
                           : typingSpeed === "blitz"
-                          ? 600
-                          : 1000 // quantum
+                          ? 40
+                          : 80 // quantum
                       }
                       theme={theme}
                       language={getFileLanguage()}
                       githubUrl={githubUrl}
                       className="shadow-lg rounded-lg"
+                      soundEnabled={soundEnabled}
                     />
                   </div>
                 </>
