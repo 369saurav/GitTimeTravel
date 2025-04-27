@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Moon, Sun, Volume2, VolumeX } from "lucide-react";
 import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
+import ClockLoadingScreen from "./clock-loading-screen";
 
 interface CommitChange {
   type: "add" | "remove" | "context";
@@ -58,7 +59,8 @@ const Home = () => {
     try {
       setError(null);
       await fetchCommitHistory(githubUrl, accessToken);
-      setShowCodeEditor(true);
+      // We'll set showCodeEditor to true when the data loads completely
+      // This way the clock animation shows while loading
     } catch (err: any) {
       setError(err.message);
     }
@@ -86,6 +88,13 @@ const Home = () => {
       setError(hookError.message);
     }
   }, [hookError]);
+
+  // Show code editor when data is loaded
+  useEffect(() => {
+    if (commitData && commitData.length > 0 && !showCodeEditor && !loading) {
+      setShowCodeEditor(true);
+    }
+  }, [commitData, loading]);
 
   // Go back to home
   const handleBackClick = () => {
@@ -139,6 +148,9 @@ const Home = () => {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
+      {/* Clock Loading Animation */}
+      <ClockLoadingScreen isLoading={loading} />
+      
       {/* Theme Toggle */}
       <div className="fixed top-4 right-4 z-10">
         <button
@@ -324,14 +336,6 @@ const Home = () => {
                   <span>←</span> Back to search
                 </button>
               </div>
-
-              {/* Loading indicator */}
-              {loading && (
-                <div className="text-center py-8">
-                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-                  <p className="mt-2">Loading commit history...</p>
-                </div>
-              )}
 
               {/* Error message */}
               {error && !loading && (
