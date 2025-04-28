@@ -3,6 +3,7 @@ import { Moon, Sun, Volume2, VolumeX } from "lucide-react";
 import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
 import ClockLoadingScreen from "./clock-loading-screen";
+import LottieLoadingScreen from "./lottie-loading";
 
 interface CommitChange {
   type: "add" | "remove" | "context";
@@ -149,7 +150,7 @@ const Home = () => {
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
       {/* Clock Loading Animation */}
-      <ClockLoadingScreen isLoading={loading} />
+      <LottieLoadingScreen isLoading={loading} />
       
       {/* Theme Toggle */}
       <div className="fixed top-4 right-4 z-10">
