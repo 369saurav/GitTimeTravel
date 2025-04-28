@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Moon, Sun, Volume2, VolumeX } from "lucide-react";
 import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
-import ClockLoadingScreen from "./clock-loading-screen";
 import LottieLoadingScreen from "./lottie-loading";
 
 interface CommitChange {
@@ -67,11 +66,11 @@ const Home = () => {
     }
   };
 
-  const toggleTheme = () => {
+  const   toggleTheme = () => {
     setTheme(theme === "light" ? "vs-dark" : "light");
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
-    root.classList.add(theme === "light" ? "light" : "dark");
+    root.classList.add(theme === "light" ? "dark" : "light");
   };
 
   const toggleSound = () => {
