@@ -4,19 +4,7 @@ import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
 import LottieLoadingScreen from "./lottie-loading";
 
-interface CommitChange {
-  type: "add" | "remove" | "context";
-  line: number;
-  content: string;
-}
 
-interface CommitData {
-  author: string;
-  date: string;
-  message: string;
-  ai_comment: string;
-  changes: CommitChange[];
-}
 
 const Home = () => {
   const [githubUrl, setGithubUrl] = useState("");

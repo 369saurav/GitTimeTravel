@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as monaco from "monaco-editor";
-import { useMonaco } from "@monaco-editor/react";
 import Editor from "@monaco-editor/react";
 import { Volume2, VolumeX } from "lucide-react";
 
@@ -90,13 +89,11 @@ const TypingCodeEditor: React.FC<TypingCodeEditorProps> = ({
     comment: string;
     avatar?: string;
   } | null>(null);
-  const [editorHeight, setEditorHeight] = useState("500px");
+  const editorHeight = "500px";
   const [detectedLanguage, setDetectedLanguage] = useState(language);
   const [soundOn, setSoundOn] = useState(soundEnabled);
   const [volume, setVolume] = useState(0.3); // Default volume level
   
-  // Monaco instance
-  const monaco = useMonaco();
 
   // Initialize sound effects
   useEffect(() => {
