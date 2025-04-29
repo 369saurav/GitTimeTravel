@@ -6,6 +6,12 @@ from app.service.time_travel_service import GitHubFileHistoryAPI
 router = APIRouter()
 logger = get_logger(__name__)
 
+
+@router.get("/")
+def read_root():
+    return {"message": "MEOW! FROM GIT TIME TRAVEL."}
+
+
 @router.get("/time-travel")
 def get_file_history(
     Authorization: str = Header(..., description="Access token from request header"),
