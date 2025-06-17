@@ -12,16 +12,13 @@ export default defineConfig({
   },  server: {
     proxy: {
       '/api': {
-        target: 'https://gittimetravel.onrender.com', // Your API server
+        target: 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       }
     }
-  }  ,
-  define: {
-    // Make environment variables available to the client code
-    'process.env': {
-      VITE_API_URL: JSON.stringify(process.env.VITE_API_URL || 'https://gittimetravel.onrender.com'),
-    },
+  },
+  build: {
+    outDir: 'dist'
   }
 })

@@ -1,21 +1,75 @@
+from http.server import BaseHTTPRequestHandler
+import json
 import sys
 import os
+from urllib.parse import urlparse, parse_qs
 
-# Add backend directory to Python path
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"))
+# Add the current directory to Python path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
 
-# Import your existing time travel router 
-from fastapi import FastAPI, Request, Response
-from app.api.routes.time_travel_controller import router as time_travel_router
-from app.config.logger import get_logger
+# Import your service classes directly
+from service.time_travel_service import GitHubFileHistoryAPI
+from config.logger import get_logger
 
-# Create a FastAPI app specifically for the time-travel endpoint
-app = FastAPI()
 logger = get_logger(__name__)
 
-# Re-export all the routes from your original router
-# This functions as a proxy to your existing API
-app.include_router(time_travel_router)
-
-# Handler for Vercel
-handler = app
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        # Parse the URL and query parameters
+        parsed_url = urlparse(self.path)
+        query_params = parse_qs(parsed_url.query)
+        
+        # Set CORS headers
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Github-Url')
+        self.end_headers()
+        
+        try:
+            # Get headers
+            authorization = self.headers.get('Authorization', '')
+            github_url = self.headers.get('Github-Url', '')
+            raw = query_params.get('raw', ['false'])[0].lower() == 'true'
+            
+            if not authorization:
+                response = {"error": "Authorization header required"}
+                self.wfile.write(json.dumps(response).encode())
+                return
+                
+            if not github_url:
+                response = {"error": "Github-Url header required"}
+                self.wfile.write(json.dumps(response).encode())
+                return
+            
+            # Extract token
+            token = authorization.replace("Bearer ", "").strip()
+            
+            # Initialize the API
+            api = GitHubFileHistoryAPI(token=token)
+            
+            # Get either raw or processed history
+            if raw:
+                logger.info("Returning raw history with patches")
+                result = api.get_raw_history(github_url)
+            else:
+                logger.info("Returning processed history with structured changes")
+                result = api.get_processed_history(github_url)
+            
+            # Send response
+            self.wfile.write(json.dumps(result).encode())
+            
+        except Exception as e:
+            logger.error(f"Error fetching file history: {str(e)}")
+            response = {"error": str(e)}
+            self.wfile.write(json.dumps(response).encode())
+    
+    def do_OPTIONS(self):
+        # Handle preflight requests
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Github-Url')
+        self.end_headers()

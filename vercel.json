@@ -1,14 +1,26 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.py" },
-    { "source": "/(.*)", "destination": "/frontend/$1" }
-  ],
-  "buildCommand": "cd frontend && npm run build && cp -r backend/requirements.txt requirements.txt",
-  "outputDirectory": "frontend/build",
-  "functions": {
-    "api/*.py": {
-      "runtime": "python3.9",
-      "maxDuration": 60
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    },
+    {
+      "src": "api/time-travel.py",
+      "use": "@vercel/python"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/api/time-travel",
+      "dest": "/api/time-travel.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
 }
