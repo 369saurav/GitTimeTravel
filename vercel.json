@@ -1,0 +1,14 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/(.*)", "destination": "/frontend/$1" }
+  ],
+  "buildCommand": "cd frontend && npm run build && cp -r backend/requirements.txt requirements.txt",
+  "outputDirectory": "frontend/build",
+  "functions": {
+    "api/*.py": {
+      "runtime": "python3.9",
+      "maxDuration": 60
+    }
+  }
+}

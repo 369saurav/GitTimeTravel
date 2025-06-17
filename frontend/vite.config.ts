@@ -9,21 +9,19 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-  },
-  server: {
+  },  server: {
     proxy: {
       '/api': {
-        target: 'https://gittimetravel.onrender.com', // Local during development
+        target: 'https://gittimetravel.onrender.com', // Your API server
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       }
     }
+  }  ,
+  define: {
+    // Make environment variables available to the client code
+    'process.env': {
+      VITE_API_URL: JSON.stringify(process.env.VITE_API_URL || 'https://gittimetravel.onrender.com'),
+    },
   }
-  // ,
-  // define: {
-  //   // Use the API URL from environment variables during production
-  //   'process.env': {
-  //     VITE_API_URL: JSON.stringify('https://gittimetravel.onrender.com'),
-  //   },
-  // }
 })

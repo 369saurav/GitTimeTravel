@@ -66,10 +66,14 @@ const useTimeTravel = (): UseTimeTravelReturn => {
       parseGithubUrl(githubUrl);
       
       setLoading(true);
-      setError(null);
-
-      // Send URL and token in headers to your API
-      const response = await axios.get('/api/time-travel', {
+      setError(null);      // Send URL and token in headers to your API
+      // Use the environment variable for the API URL, with fallback for development
+      const baseUrl = import.meta.env.VITE_API_URL || '/api';
+      const apiUrl = import.meta.env.PROD 
+        ? `${baseUrl}/time-travel`
+        : '/api/time-travel';
+        
+      const response = await axios.get(apiUrl, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Github-Url': githubUrl
