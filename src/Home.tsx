@@ -4,10 +4,12 @@ import TypingCodeEditor from "./typing-code-editor";
 import useTimeTravel from "./hooks/use-github";
 import LottieLoadingScreen from "./lottie-loading";
 
+interface HomeProps {
+  prefilledUrl?: string;
+}
 
-
-const Home = () => {
-  const [githubUrl, setGithubUrl] = useState("");
+const Home = ({ prefilledUrl }: HomeProps) => {
+  const [githubUrl, setGithubUrl] = useState(prefilledUrl || "");
   const [accessToken, setAccessToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
@@ -16,6 +18,13 @@ const Home = () => {
   const [typingSpeed, setTypingSpeed] = useState<
     "zen" | "flow" | "blitz" | "quantum"
   >("flow");
+  
+  // Update githubUrl when prefilledUrl changes
+  useEffect(() => {
+    if (prefilledUrl) {
+      setGithubUrl(prefilledUrl);
+    }
+  }, [prefilledUrl]);
   
   // Get data and functions from the custom hook
   const { 

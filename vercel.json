@@ -12,15 +12,26 @@
       "src": "api/time-travel.py",
       "use": "@vercel/python"
     }
-  ],
-  "routes": [
+  ],  "routes": [
     {
       "src": "/api/time-travel",
       "dest": "/api/time-travel.py"
     },
     {
-      "src": "/(.*)",
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|svg|ico|json|mp3))",
       "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
