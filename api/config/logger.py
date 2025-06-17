@@ -2,10 +2,6 @@ import logging
 import os
 import sys
 
-# Create logs directory if not exists (for local development)
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
-
 def get_logger(name: str) -> logging.Logger:
     """
     Returns a configured logger that works both locally and on Vercel.
@@ -28,10 +24,17 @@ def get_logger(name: str) -> logging.Logger:
         # File Handler (only for local development)
         # Vercel doesn't support persistent file storage for logs
         if os.environ.get("VERCEL_ENV") is None:
-            file_handler = logging.FileHandler(os.path.join(LOG_DIR, "app.log"))
-            file_handler.setLevel(logging.DEBUG)  # Capture detailed logs in file
-            file_handler.setFormatter(formatter)
-            logger.addHandler(file_handler)
+            try:
+                # Create logs directory if not exists (for local development only)
+                LOG_DIR = "logs"
+                os.makedirs(LOG_DIR, exist_ok=True)
+                file_handler = logging.FileHandler(os.path.join(LOG_DIR, "app.log"))
+                file_handler.setLevel(logging.DEBUG)  # Capture detailed logs in file
+                file_handler.setFormatter(formatter)
+                logger.addHandler(file_handler)
+            except OSError:
+                # Skip file logging if directory creation fails (e.g., on Vercel)
+                pass
 
         # Avoid duplicated logs
         logger.propagate = False
